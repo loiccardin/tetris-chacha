@@ -3,7 +3,7 @@
 import type { GameState } from "@/lib/tetris/types";
 import PiecePreview from "./PiecePreview";
 
-export default function HUD({ state }: { state: GameState }) {
+export default function HUD({ state, version: _v }: { state: GameState; version: number }) {
   const seconds = Math.floor(state.durationMs / 1000);
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");

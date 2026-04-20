@@ -7,10 +7,11 @@ import { getGhostY } from "@/lib/tetris/game";
 
 interface Props {
   state: GameState;
+  version: number;
   cellSize?: number;
 }
 
-export default function TetrisCanvas({ state, cellSize = 28 }: Props) {
+export default function TetrisCanvas({ state, version, cellSize = 28 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const width = BOARD_WIDTH * cellSize;
@@ -100,7 +101,7 @@ export default function TetrisCanvas({ state, cellSize = 28 }: Props) {
         height / 2,
       );
     }
-  }, [state, cellSize, width, height]);
+  }, [state, version, cellSize, width, height]);
 
   return (
     <canvas

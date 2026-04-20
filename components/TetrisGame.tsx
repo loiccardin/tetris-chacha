@@ -19,8 +19,8 @@ import GameOverModal from "./GameOverModal";
 
 export default function TetrisGame() {
   const stateRef = useRef<GameState>(createInitialState());
-  const [, setTickCounter] = useState(0);
-  const rerender = useCallback(() => setTickCounter((c) => c + 1), []);
+  const [version, setVersion] = useState(0);
+  const rerender = useCallback(() => setVersion((c) => c + 1), []);
 
   const restart = useCallback(() => {
     stateRef.current = createInitialState();
@@ -158,8 +158,8 @@ export default function TetrisGame() {
   return (
     <div className="flex flex-col items-center gap-4 w-full">
       <div className="flex flex-row gap-4 items-start justify-center flex-wrap">
-        <TetrisCanvas state={s} />
-        <HUD state={s} />
+        <TetrisCanvas state={s} version={version} />
+        <HUD state={s} version={version} />
       </div>
       <Controls
         onMove={(dx) => {
