@@ -46,21 +46,15 @@ export function HoldButton({
     <button
       type="button"
       aria-label={ariaLabel}
-      onTouchStart={(e) => {
+      onPointerDown={(e) => {
         e.preventDefault();
+        (e.target as Element).setPointerCapture?.(e.pointerId);
         start();
       }}
-      onTouchEnd={(e) => {
-        e.preventDefault();
-        stop();
-      }}
-      onTouchCancel={stop}
-      onMouseDown={(e) => {
-        e.preventDefault();
-        start();
-      }}
-      onMouseUp={stop}
-      onMouseLeave={stop}
+      onPointerUp={stop}
+      onPointerCancel={stop}
+      onPointerLeave={stop}
+      onContextMenu={(e) => e.preventDefault()}
       className={`bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-lg active:bg-neutral-700 font-semibold select-none touch-none flex items-center justify-center ${className}`}
     >
       {children}
@@ -74,15 +68,22 @@ export function TapButton({
   className = "",
   ariaLabel,
 }: BtnProps & { onTap: () => void }) {
+  const firedRef = useRef(false);
   return (
     <button
       type="button"
       aria-label={ariaLabel}
-      onTouchStart={(e) => {
+      onPointerDown={(e) => {
         e.preventDefault();
+        // Prevent double-fire from synthesized click after a touch.
+        if (firedRef.current) return;
+        firedRef.current = true;
         onTap();
+        setTimeout(() => {
+          firedRef.current = false;
+        }, 80);
       }}
-      onClick={onTap}
+      onContextMenu={(e) => e.preventDefault()}
       className={`bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-lg active:bg-neutral-700 font-semibold select-none touch-none flex items-center justify-center ${className}`}
     >
       {children}

@@ -133,14 +133,10 @@ export default function TetrisGame() {
       const a = getAudio();
       switch (k) {
         case "ArrowLeft":
-          startRepeat(() => {
-            if (move(stateRef.current, -1)) a.playMove();
-          });
+          startRepeat(() => move(stateRef.current, -1));
           break;
         case "ArrowRight":
-          startRepeat(() => {
-            if (move(stateRef.current, 1)) a.playMove();
-          });
+          startRepeat(() => move(stateRef.current, 1));
           break;
         case "ArrowDown":
           startRepeat(() => softDrop(stateRef.current));
@@ -222,7 +218,7 @@ export default function TetrisGame() {
   };
 
   const doMove = (dx: number) => {
-    if (move(s, dx)) getAudio().playMove();
+    move(s, dx);
     rerender();
   };
   const doRotate = () => {
@@ -257,9 +253,9 @@ export default function TetrisGame() {
 
   return (
     <div className="w-full flex flex-col items-center">
-      <div className="flex flex-row items-center justify-center gap-2 sm:gap-4 w-full">
-        {/* LEFT PAD */}
-        <div className="flex flex-col gap-2 shrink-0">
+      <div className="flex flex-row items-start justify-center gap-2 sm:gap-4 w-full">
+        {/* LEFT PAD — main gauche */}
+        <div className="flex flex-col gap-2 shrink-0 justify-center self-center">
           <HoldButton
             onHold={withAudio(() => doMove(-1))}
             ariaLabel="Gauche"
@@ -284,7 +280,7 @@ export default function TetrisGame() {
           <TapButton
             onTap={withAudio(doHard)}
             ariaLabel="Chute instantanée"
-            className="w-16 h-10 text-xl sm:w-20 sm:h-12 sm:text-2xl bg-cyan-900/40 border-cyan-700"
+            className="w-16 h-16 text-3xl sm:w-20 sm:h-20 sm:text-4xl bg-cyan-900/40 border-cyan-700"
           >
             ⤓
           </TapButton>
@@ -297,50 +293,61 @@ export default function TetrisGame() {
           gameOverFillRow={gameOverFillRow}
         />
 
-        {/* RIGHT */}
-        <div className="flex flex-col items-stretch gap-2 shrink-0">
-          <HUD state={s} version={version} />
+        {/* RIGHT PAD — main droite */}
+        <div className="flex flex-col gap-2 shrink-0 justify-center self-center">
           <TapButton
             onTap={withAudio(doRotate)}
             ariaLabel="Tourner"
-            className="w-full h-20 text-4xl sm:text-5xl bg-purple-900/40 border-purple-700"
+            className="w-16 h-16 text-3xl sm:w-20 sm:h-20 sm:text-4xl bg-purple-900/40 border-purple-700"
           >
             ⟳
           </TapButton>
-          <div className="flex gap-2">
-            <TapButton
-              onTap={withAudio(doHoldBtn)}
-              ariaLabel="Hold"
-              className="flex-1 h-10 text-sm"
-            >
-              Hold
-            </TapButton>
-            <TapButton
-              onTap={withAudio(doPause)}
-              ariaLabel="Pause"
-              className="flex-1 h-10 text-sm"
-            >
-              ⏸
-            </TapButton>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                kickAudio();
-                toggleMusic();
-              }}
-              className="flex-1 h-9 text-xs bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded"
-            >
-              {musicOn ? "♪ on" : "♪ off"}
-            </button>
-            <button
-              onClick={toggleMute}
-              className="flex-1 h-9 text-xs bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded"
-            >
-              {muted ? "🔇" : "🔊"}
-            </button>
-          </div>
+          <TapButton
+            onTap={withAudio(doHoldBtn)}
+            ariaLabel="Hold"
+            className="w-16 h-16 text-xs sm:w-20 sm:h-20 sm:text-sm"
+          >
+            Hold
+          </TapButton>
+          <TapButton
+            onTap={withAudio(doPause)}
+            ariaLabel="Pause"
+            className="w-16 h-16 text-2xl sm:w-20 sm:h-20 sm:text-3xl"
+          >
+            ⏸
+          </TapButton>
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              kickAudio();
+              toggleMusic();
+            }}
+            className="w-16 h-10 sm:w-20 sm:h-10 text-xs bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-lg touch-none"
+          >
+            {musicOn ? "♪ on" : "♪ off"}
+          </button>
         </div>
+
+        {/* HUD — visible on md+ to the far right */}
+        <div className="hidden md:flex flex-col shrink-0">
+          <HUD state={s} version={version} />
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              toggleMute();
+            }}
+            className="mt-2 w-full h-9 text-xs bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-lg touch-none"
+          >
+            {muted ? "🔇 muet" : "🔊 son"}
+          </button>
+        </div>
+      </div>
+
+      {/* Compact HUD under the board on small screens */}
+      <div className="md:hidden mt-3 w-full max-w-xs">
+        <HUD state={s} version={version} compact />
       </div>
 
       <div className="text-[11px] text-neutral-500 text-center leading-relaxed mt-4 hidden md:block">
