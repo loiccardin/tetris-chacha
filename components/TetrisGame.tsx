@@ -14,7 +14,7 @@ import {
 import type { GameState } from "@/lib/tetris/types";
 import TetrisCanvas from "./TetrisCanvas";
 import HUD from "./HUD";
-import Controls from "./Controls";
+import { HoldButton, TapButton } from "./Controls";
 import GameOverModal from "./GameOverModal";
 
 export default function TetrisGame() {
@@ -27,7 +27,6 @@ export default function TetrisGame() {
     rerender();
   }, [rerender]);
 
-  // Game loop
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -42,9 +41,7 @@ export default function TetrisGame() {
     return () => cancelAnimationFrame(raf);
   }, [rerender]);
 
-  // Keyboard handling with DAS-like autorepeat for left/right and soft drop.
   useEffect(() => {
-    const heldKeys = new Set<string>();
     let dasTimer: ReturnType<typeof setTimeout> | null = null;
     let arrInterval: ReturnType<typeof setInterval> | null = null;
     const DAS = 150;
@@ -72,7 +69,6 @@ export default function TetrisGame() {
       if (["ArrowLeft", "ArrowRight", "ArrowDown", " ", "ArrowUp"].includes(k)) {
         e.preventDefault();
       }
-      heldKeys.add(k);
       switch (k) {
         case "ArrowLeft":
           startRepeat(() => move(stateRef.current, -1));
@@ -114,7 +110,6 @@ export default function TetrisGame() {
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      heldKeys.delete(e.key);
       if (
         e.key === "ArrowLeft" ||
         e.key === "ArrowRight" ||
@@ -155,38 +150,103 @@ export default function TetrisGame() {
 
   const s = stateRef.current;
 
+  const doMove = (dx: number) => {
+    move(s, dx);
+    rerender();
+  };
+  const doRotate = () => {
+    rotatePiece(s, 1);
+    rerender();
+  };
+  const doSoft = () => {
+    softDrop(s);
+    rerender();
+  };
+  const doHard = () => {
+    hardDrop(s);
+    rerender();
+  };
+  const doHoldBtn = () => {
+    doHold(s);
+    rerender();
+  };
+  const doPause = () => {
+    togglePause(s);
+    rerender();
+  };
+
   return (
-    <div className="flex flex-col items-center gap-4 w-full">
-      <div className="flex flex-row gap-4 items-start justify-center flex-wrap">
+    <div className="w-full flex flex-col items-center">
+      {/* Game area: 3 columns — left pad | canvas | right pad + HUD */}
+      <div className="flex flex-row items-center justify-center gap-2 sm:gap-4 w-full">
+        {/* LEFT PAD — main gauche */}
+        <div className="flex flex-col gap-2 shrink-0">
+          <HoldButton
+            onHold={() => doMove(-1)}
+            ariaLabel="Gauche"
+            className="w-16 h-16 text-3xl sm:w-20 sm:h-20 sm:text-4xl"
+          >
+            ←
+          </HoldButton>
+          <HoldButton
+            onHold={() => doMove(1)}
+            ariaLabel="Droite"
+            className="w-16 h-16 text-3xl sm:w-20 sm:h-20 sm:text-4xl"
+          >
+            →
+          </HoldButton>
+          <HoldButton
+            onHold={doSoft}
+            ariaLabel="Descendre"
+            className="w-16 h-16 text-3xl sm:w-20 sm:h-20 sm:text-4xl"
+          >
+            ↓
+          </HoldButton>
+          <TapButton
+            onTap={doHard}
+            ariaLabel="Chute instantanée"
+            className="w-16 h-10 text-xl sm:w-20 sm:h-12 sm:text-2xl bg-cyan-900/40 border-cyan-700"
+          >
+            ⤓
+          </TapButton>
+        </div>
+
+        {/* CENTER — canvas */}
         <TetrisCanvas state={s} version={version} />
-        <HUD state={s} version={version} />
+
+        {/* RIGHT — HUD + rotate */}
+        <div className="flex flex-col items-stretch gap-2 shrink-0">
+          <HUD state={s} version={version} />
+          <TapButton
+            onTap={doRotate}
+            ariaLabel="Tourner"
+            className="w-full h-20 text-4xl sm:text-5xl bg-purple-900/40 border-purple-700"
+          >
+            ⟳
+          </TapButton>
+          <div className="flex gap-2">
+            <TapButton
+              onTap={doHoldBtn}
+              ariaLabel="Hold"
+              className="flex-1 h-10 text-sm"
+            >
+              Hold
+            </TapButton>
+            <TapButton
+              onTap={doPause}
+              ariaLabel="Pause"
+              className="flex-1 h-10 text-sm"
+            >
+              ⏸
+            </TapButton>
+          </div>
+        </div>
       </div>
-      <Controls
-        onMove={(dx) => {
-          move(s, dx);
-          rerender();
-        }}
-        onRotate={(d) => {
-          rotatePiece(s, d);
-          rerender();
-        }}
-        onSoftDrop={() => {
-          softDrop(s);
-          rerender();
-        }}
-        onHardDrop={() => {
-          hardDrop(s);
-          rerender();
-        }}
-        onHold={() => {
-          doHold(s);
-          rerender();
-        }}
-        onPause={() => {
-          togglePause(s);
-          rerender();
-        }}
-      />
+
+      <div className="text-[11px] text-neutral-500 text-center leading-relaxed mt-4 hidden md:block">
+        Clavier : ← → ↓ · Espace = hard drop · Z/X = rotations · Shift = hold · P = pause
+      </div>
+
       {s.isGameOver && (
         <GameOverModal
           score={s.score}

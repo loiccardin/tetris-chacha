@@ -1,71 +1,91 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
-interface Props {
-  onMove: (dx: number) => void;
-  onRotate: (dir: 1 | -1) => void;
-  onSoftDrop: () => void;
-  onHardDrop: () => void;
-  onHold: () => void;
-  onPause: () => void;
-}
+const HOLD_FIRST_MS = 150;
+const HOLD_REPEAT_MS = 45;
 
-export default function Controls(props: Props) {
-  const [isTouch, setIsTouch] = useState(false);
+function useHoldRepeat(action: () => void) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    setIsTouch("ontouchstart" in window);
+  const clear = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    timerRef.current = null;
+    intervalRef.current = null;
   }, []);
 
-  if (!isTouch) {
-    return (
-      <div className="text-xs text-neutral-400 leading-relaxed mt-4">
-        <div className="font-semibold text-neutral-300 mb-1">Contrôles</div>
-        <div>← → déplacer · ↓ soft drop · Espace hard drop</div>
-        <div>Z/Q rot. anti-horaire · X/W/↑ rot. horaire</div>
-        <div>Shift/C hold · P pause</div>
-      </div>
-    );
-  }
+  const start = useCallback(() => {
+    clear();
+    action();
+    timerRef.current = setTimeout(() => {
+      intervalRef.current = setInterval(action, HOLD_REPEAT_MS);
+    }, HOLD_FIRST_MS);
+  }, [action, clear]);
 
-  const Btn = ({
-    onPress,
-    children,
-    wide,
-  }: {
-    onPress: () => void;
-    children: React.ReactNode;
-    wide?: boolean;
-  }) => (
+  useEffect(() => clear, [clear]);
+
+  return { start, stop: clear };
+}
+
+type BtnProps = {
+  children: React.ReactNode;
+  className?: string;
+  ariaLabel: string;
+};
+
+export function HoldButton({
+  onHold,
+  children,
+  className = "",
+  ariaLabel,
+}: BtnProps & { onHold: () => void }) {
+  const { start, stop } = useHoldRepeat(onHold);
+  return (
     <button
+      type="button"
+      aria-label={ariaLabel}
       onTouchStart={(e) => {
         e.preventDefault();
-        onPress();
+        start();
       }}
+      onTouchEnd={(e) => {
+        e.preventDefault();
+        stop();
+      }}
+      onTouchCancel={stop}
       onMouseDown={(e) => {
         e.preventDefault();
-        onPress();
+        start();
       }}
-      className={`bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-lg py-3 active:bg-neutral-800 text-lg font-semibold ${
-        wide ? "col-span-2" : ""
-      }`}
+      onMouseUp={stop}
+      onMouseLeave={stop}
+      className={`bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-lg active:bg-neutral-700 font-semibold select-none touch-none flex items-center justify-center ${className}`}
     >
       {children}
     </button>
   );
+}
 
+export function TapButton({
+  onTap,
+  children,
+  className = "",
+  ariaLabel,
+}: BtnProps & { onTap: () => void }) {
   return (
-    <div className="mt-4 grid grid-cols-4 gap-2 w-full max-w-md">
-      <Btn onPress={() => props.onHold()}>Hold</Btn>
-      <Btn onPress={() => props.onRotate(-1)}>⟲</Btn>
-      <Btn onPress={() => props.onRotate(1)}>⟳</Btn>
-      <Btn onPress={() => props.onPause()}>⏸</Btn>
-
-      <Btn onPress={() => props.onMove(-1)}>←</Btn>
-      <Btn onPress={() => props.onSoftDrop()}>↓</Btn>
-      <Btn onPress={() => props.onMove(1)}>→</Btn>
-      <Btn onPress={() => props.onHardDrop()}>⤓</Btn>
-    </div>
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onTouchStart={(e) => {
+        e.preventDefault();
+        onTap();
+      }}
+      onClick={onTap}
+      className={`bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-lg active:bg-neutral-700 font-semibold select-none touch-none flex items-center justify-center ${className}`}
+    >
+      {children}
+    </button>
   );
 }
