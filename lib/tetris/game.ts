@@ -78,6 +78,8 @@ export function createInitialState(
     durationMs: 0,
     backToBack: false,
     lastClearWasTetris: false,
+    lockCount: 0,
+    lastClearLines: 0,
     _bag: bag,
   } as GameState & { _bag: BagRandomizer };
 }
@@ -203,7 +205,9 @@ function isOnGround(state: GameState): boolean {
 
 function lockCurrent(state: GameState): void {
   state.board = lockPiece(state.board, state.current);
+  state.lockCount += 1;
   const full = findFullLines(state.board);
+  state.lastClearLines = full.length;
   if (full.length > 0) {
     state.board = clearLines(state.board, full);
     const { score, isTetris } = scoreForLines(
@@ -218,8 +222,6 @@ function lockCurrent(state: GameState): void {
     const newLevel = Math.min(20, 1 + Math.floor(state.lines / 10));
     if (newLevel > state.level) state.level = newLevel;
   } else {
-    // non-clearing lock: back-to-back persists only across tetrises; any normal clear resets it.
-    // Here we leave backToBack alone since no clear happened.
     state.lastClearWasTetris = false;
   }
   spawnNext(state);

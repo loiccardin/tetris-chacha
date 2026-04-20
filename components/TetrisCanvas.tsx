@@ -9,9 +9,10 @@ interface Props {
   state: GameState;
   version: number;
   cellSize?: number;
+  gameOverFillRow?: number | null;
 }
 
-export default function TetrisCanvas({ state, version, cellSize = 28 }: Props) {
+export default function TetrisCanvas({ state, version, cellSize = 28, gameOverFillRow = null }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const width = BOARD_WIDTH * cellSize;
@@ -89,19 +90,33 @@ export default function TetrisCanvas({ state, version, cellSize = 28 }: Props) {
       }
     }
 
-    if (state.isPaused || state.isGameOver) {
+    // Game over fill animation: fill rows [fillRow..BOARD_HEIGHT-1] with grey squares.
+    if (gameOverFillRow !== null) {
+      for (let by = gameOverFillRow; by < state.board.length; by++) {
+        const displayY = by - BUFFER;
+        if (displayY < 0) continue;
+        for (let bx = 0; bx < BOARD_WIDTH; bx++) {
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = "#9ca3af";
+          ctx.fillRect(
+            bx * cellSize + 1,
+            displayY * cellSize + 1,
+            cellSize - 2,
+            cellSize - 2,
+          );
+        }
+      }
+    }
+
+    if (state.isPaused && !state.isGameOver) {
       ctx.fillStyle = "rgba(0,0,0,0.6)";
       ctx.fillRect(0, 0, width, height);
       ctx.fillStyle = "#f3f4f6";
       ctx.textAlign = "center";
       ctx.font = "bold 28px ui-sans-serif, system-ui";
-      ctx.fillText(
-        state.isGameOver ? "GAME OVER" : "PAUSE",
-        width / 2,
-        height / 2,
-      );
+      ctx.fillText("PAUSE", width / 2, height / 2);
     }
-  }, [state, version, cellSize, width, height]);
+  }, [state, version, cellSize, width, height, gameOverFillRow]);
 
   return (
     <canvas

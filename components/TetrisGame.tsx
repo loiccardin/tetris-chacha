@@ -12,6 +12,8 @@ import {
   togglePause,
 } from "@/lib/tetris/game";
 import type { GameState } from "@/lib/tetris/types";
+import { BOARD_HEIGHT, BOARD_WIDTH, BUFFER } from "@/lib/tetris/types";
+import { getAudio } from "@/lib/audio";
 import TetrisCanvas from "./TetrisCanvas";
 import HUD from "./HUD";
 import { HoldButton, TapButton } from "./Controls";
@@ -20,20 +22,54 @@ import GameOverModal from "./GameOverModal";
 export default function TetrisGame() {
   const stateRef = useRef<GameState>(createInitialState());
   const [version, setVersion] = useState(0);
+  const [audioReady, setAudioReady] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [musicOn, setMusicOn] = useState(true);
+  const [gameOverFillRow, setGameOverFillRow] = useState<number | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
   const rerender = useCallback(() => setVersion((c) => c + 1), []);
+
+  const lockCountRef = useRef(0);
+  const gameOverHandledRef = useRef(false);
 
   const restart = useCallback(() => {
     stateRef.current = createInitialState();
+    lockCountRef.current = 0;
+    gameOverHandledRef.current = false;
+    setGameOverFillRow(null);
+    setShowModal(false);
     rerender();
   }, [rerender]);
 
+  const kickAudio = useCallback(() => {
+    const a = getAudio();
+    if (!audioReady) {
+      a.resume().then(() => {
+        if (musicOn) a.startMusic();
+        setAudioReady(true);
+      });
+    }
+  }, [audioReady, musicOn]);
+
+  // Game loop
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number) => {
       const delta = Math.min(100, now - last);
       last = now;
-      tick(stateRef.current, delta);
+      const s = stateRef.current;
+      if (!s.isGameOver) tick(s, delta);
+
+      // detect lock & clear events
+      if (s.lockCount !== lockCountRef.current) {
+        lockCountRef.current = s.lockCount;
+        const a = getAudio();
+        if (s.lastClearLines > 0) a.playClear(s.lastClearLines);
+        else a.playLock();
+      }
+
       rerender();
       raf = requestAnimationFrame(loop);
     };
@@ -41,6 +77,30 @@ export default function TetrisGame() {
     return () => cancelAnimationFrame(raf);
   }, [rerender]);
 
+  // Game over → fill animation → modal
+  useEffect(() => {
+    const s = stateRef.current;
+    if (!s.isGameOver || gameOverHandledRef.current) return;
+    gameOverHandledRef.current = true;
+    const a = getAudio();
+    a.stopMusic();
+    a.playGameOver();
+    // Fill from bottom to top
+    let row = BOARD_HEIGHT - 1;
+    setGameOverFillRow(row);
+    const interval = setInterval(() => {
+      row -= 1;
+      if (row < BUFFER - 1) {
+        clearInterval(interval);
+        setShowModal(true);
+        return;
+      }
+      setGameOverFillRow(row);
+    }, 40);
+    return () => clearInterval(interval);
+  }, [version]);
+
+  // Keyboard
   useEffect(() => {
     let dasTimer: ReturnType<typeof setTimeout> | null = null;
     let arrInterval: ReturnType<typeof setInterval> | null = null;
@@ -63,18 +123,24 @@ export default function TetrisGame() {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
+      kickAudio();
       const s = stateRef.current;
       if (e.repeat) return;
       const k = e.key;
       if (["ArrowLeft", "ArrowRight", "ArrowDown", " ", "ArrowUp"].includes(k)) {
         e.preventDefault();
       }
+      const a = getAudio();
       switch (k) {
         case "ArrowLeft":
-          startRepeat(() => move(stateRef.current, -1));
+          startRepeat(() => {
+            if (move(stateRef.current, -1)) a.playMove();
+          });
           break;
         case "ArrowRight":
-          startRepeat(() => move(stateRef.current, 1));
+          startRepeat(() => {
+            if (move(stateRef.current, 1)) a.playMove();
+          });
           break;
         case "ArrowDown":
           startRepeat(() => softDrop(stateRef.current));
@@ -87,13 +153,13 @@ export default function TetrisGame() {
         case "X":
         case "w":
         case "W":
-          rotatePiece(s, 1);
+          if (rotatePiece(s, 1)) a.playRotate();
           break;
         case "z":
         case "Z":
         case "q":
         case "Q":
-          rotatePiece(s, -1);
+          if (rotatePiece(s, -1)) a.playRotate();
           break;
         case "Shift":
         case "c":
@@ -126,7 +192,7 @@ export default function TetrisGame() {
       window.removeEventListener("keyup", onKeyUp);
       clearRepeat();
     };
-  }, [rerender]);
+  }, [rerender, kickAudio]);
 
   const submitScore = useCallback(async (pseudo: string) => {
     const s = stateRef.current;
@@ -150,12 +216,17 @@ export default function TetrisGame() {
 
   const s = stateRef.current;
 
+  const withAudio = (fn: () => void) => () => {
+    kickAudio();
+    fn();
+  };
+
   const doMove = (dx: number) => {
-    move(s, dx);
+    if (move(s, dx)) getAudio().playMove();
     rerender();
   };
   const doRotate = () => {
-    rotatePiece(s, 1);
+    if (rotatePiece(s, 1)) getAudio().playRotate();
     rerender();
   };
   const doSoft = () => {
@@ -175,35 +246,43 @@ export default function TetrisGame() {
     rerender();
   };
 
+  const toggleMute = () => {
+    const newMuted = getAudio().toggleMute();
+    setMuted(newMuted);
+  };
+  const toggleMusic = () => {
+    const on = getAudio().toggleMusic();
+    setMusicOn(on);
+  };
+
   return (
     <div className="w-full flex flex-col items-center">
-      {/* Game area: 3 columns — left pad | canvas | right pad + HUD */}
       <div className="flex flex-row items-center justify-center gap-2 sm:gap-4 w-full">
-        {/* LEFT PAD — main gauche */}
+        {/* LEFT PAD */}
         <div className="flex flex-col gap-2 shrink-0">
           <HoldButton
-            onHold={() => doMove(-1)}
+            onHold={withAudio(() => doMove(-1))}
             ariaLabel="Gauche"
             className="w-16 h-16 text-3xl sm:w-20 sm:h-20 sm:text-4xl"
           >
             ←
           </HoldButton>
           <HoldButton
-            onHold={() => doMove(1)}
+            onHold={withAudio(() => doMove(1))}
             ariaLabel="Droite"
             className="w-16 h-16 text-3xl sm:w-20 sm:h-20 sm:text-4xl"
           >
             →
           </HoldButton>
           <HoldButton
-            onHold={doSoft}
+            onHold={withAudio(doSoft)}
             ariaLabel="Descendre"
             className="w-16 h-16 text-3xl sm:w-20 sm:h-20 sm:text-4xl"
           >
             ↓
           </HoldButton>
           <TapButton
-            onTap={doHard}
+            onTap={withAudio(doHard)}
             ariaLabel="Chute instantanée"
             className="w-16 h-10 text-xl sm:w-20 sm:h-12 sm:text-2xl bg-cyan-900/40 border-cyan-700"
           >
@@ -211,14 +290,18 @@ export default function TetrisGame() {
           </TapButton>
         </div>
 
-        {/* CENTER — canvas */}
-        <TetrisCanvas state={s} version={version} />
+        {/* CENTER */}
+        <TetrisCanvas
+          state={s}
+          version={version}
+          gameOverFillRow={gameOverFillRow}
+        />
 
-        {/* RIGHT — HUD + rotate */}
+        {/* RIGHT */}
         <div className="flex flex-col items-stretch gap-2 shrink-0">
           <HUD state={s} version={version} />
           <TapButton
-            onTap={doRotate}
+            onTap={withAudio(doRotate)}
             ariaLabel="Tourner"
             className="w-full h-20 text-4xl sm:text-5xl bg-purple-900/40 border-purple-700"
           >
@@ -226,19 +309,36 @@ export default function TetrisGame() {
           </TapButton>
           <div className="flex gap-2">
             <TapButton
-              onTap={doHoldBtn}
+              onTap={withAudio(doHoldBtn)}
               ariaLabel="Hold"
               className="flex-1 h-10 text-sm"
             >
               Hold
             </TapButton>
             <TapButton
-              onTap={doPause}
+              onTap={withAudio(doPause)}
               ariaLabel="Pause"
               className="flex-1 h-10 text-sm"
             >
               ⏸
             </TapButton>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                kickAudio();
+                toggleMusic();
+              }}
+              className="flex-1 h-9 text-xs bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded"
+            >
+              {musicOn ? "♪ on" : "♪ off"}
+            </button>
+            <button
+              onClick={toggleMute}
+              className="flex-1 h-9 text-xs bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded"
+            >
+              {muted ? "🔇" : "🔊"}
+            </button>
           </div>
         </div>
       </div>
@@ -247,7 +347,7 @@ export default function TetrisGame() {
         Clavier : ← → ↓ · Espace = hard drop · Z/X = rotations · Shift = hold · P = pause
       </div>
 
-      {s.isGameOver && (
+      {showModal && (
         <GameOverModal
           score={s.score}
           lines={s.lines}

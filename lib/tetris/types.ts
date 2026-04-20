@@ -30,6 +30,8 @@ export interface GameState {
   durationMs: number;
   backToBack: boolean;
   lastClearWasTetris: boolean;
+  lockCount: number;
+  lastClearLines: number;
 }
 
 export const BOARD_WIDTH = 10;
