@@ -6,6 +6,10 @@ import {
   findFullLines,
   lockPiece,
 } from "./board";
+
+export function linesGoalFor(level: number): number {
+  return 10 + 5 * (level - 1);
+}
 import { BagRandomizer } from "./rng";
 import { rotate } from "./srs";
 import { spawnX, spawnY } from "./tetromino";
@@ -80,6 +84,9 @@ export function createInitialState(
     lastClearWasTetris: false,
     lockCount: 0,
     lastClearLines: 0,
+    linesThisLevel: 0,
+    levelUpCount: 0,
+    levelTransitionPending: false,
     _bag: bag,
   } as GameState & { _bag: BagRandomizer };
 }
@@ -123,7 +130,7 @@ function scoreForLines(
 }
 
 export function move(state: GameState, dx: number): boolean {
-  if (state.isGameOver || state.isPaused) return false;
+  if (state.isGameOver || state.isPaused || state.levelTransitionPending) return false;
   const candidate: Piece = { ...state.current, x: state.current.x + dx };
   if (!collides(state.board, candidate)) {
     state.current = candidate;
@@ -135,7 +142,7 @@ export function move(state: GameState, dx: number): boolean {
 }
 
 export function rotatePiece(state: GameState, direction: 1 | -1): boolean {
-  if (state.isGameOver || state.isPaused) return false;
+  if (state.isGameOver || state.isPaused || state.levelTransitionPending) return false;
   const rotated = rotate(state.board, state.current, direction);
   if (rotated) {
     state.current = rotated;
@@ -146,7 +153,7 @@ export function rotatePiece(state: GameState, direction: 1 | -1): boolean {
 }
 
 export function softDrop(state: GameState): boolean {
-  if (state.isGameOver || state.isPaused) return false;
+  if (state.isGameOver || state.isPaused || state.levelTransitionPending) return false;
   const candidate: Piece = { ...state.current, y: state.current.y + 1 };
   if (!collides(state.board, candidate)) {
     state.current = candidate;
@@ -157,7 +164,7 @@ export function softDrop(state: GameState): boolean {
 }
 
 export function hardDrop(state: GameState): void {
-  if (state.isGameOver || state.isPaused) return;
+  if (state.isGameOver || state.isPaused || state.levelTransitionPending) return;
   const d = dropDistance(state.board, state.current);
   state.current = { ...state.current, y: state.current.y + d };
   state.score += d * 2;
@@ -165,7 +172,7 @@ export function hardDrop(state: GameState): void {
 }
 
 export function hold(state: GameState): boolean {
-  if (state.isGameOver || state.isPaused) return false;
+  if (state.isGameOver || state.isPaused || state.levelTransitionPending) return false;
   if (!state.canHold) return false;
   const bag = getBag(state);
   const currentKind = state.current.kind;
@@ -217,18 +224,35 @@ function lockCurrent(state: GameState): void {
     );
     state.score += score;
     state.lines += full.length;
+    state.linesThisLevel += full.length;
     state.lastClearWasTetris = isTetris;
     state.backToBack = isTetris;
-    const newLevel = Math.min(20, 1 + Math.floor(state.lines / 10));
-    if (newLevel > state.level) state.level = newLevel;
+
+    const goal = linesGoalFor(state.level);
+    if (state.linesThisLevel >= goal) {
+      state.level += 1;
+      state.linesThisLevel = 0;
+      state.levelUpCount += 1;
+      state.board = createBoard();
+      state.levelTransitionPending = true;
+      return; // pause piece spawn until transition is resolved
+    }
   } else {
     state.lastClearWasTetris = false;
   }
   spawnNext(state);
 }
 
+export function resumeAfterLevelTransition(state: GameState): void {
+  if (!state.levelTransitionPending) return;
+  state.levelTransitionPending = false;
+  state.dropCounter = 0;
+  state.lockTimer = 0;
+  spawnNext(state);
+}
+
 export function tick(state: GameState, deltaMs: number): void {
-  if (state.isGameOver || state.isPaused) return;
+  if (state.isGameOver || state.isPaused || state.levelTransitionPending) return;
   state.durationMs += deltaMs;
   const gravityMs = msPerCell(state.level);
   state.dropCounter += deltaMs;

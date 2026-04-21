@@ -90,19 +90,29 @@ export default function TetrisCanvas({ state, version, cellSize = 28, gameOverFi
       }
     }
 
-    // Game over fill animation: fill rows [fillRow..BOARD_HEIGHT-1] with grey squares.
+    // Game over fill animation: fill rows [fillRow..BOARD_HEIGHT-1] with colored blocks.
     if (gameOverFillRow !== null) {
+      const palette = Object.values(COLORS);
       for (let by = gameOverFillRow; by < state.board.length; by++) {
         const displayY = by - BUFFER;
         if (displayY < 0) continue;
         for (let bx = 0; bx < BOARD_WIDTH; bx++) {
+          // Deterministic "random" color per cell so it looks fun but doesn't flicker.
+          const color = palette[(bx * 7 + by * 13) % palette.length];
           ctx.globalAlpha = 1;
-          ctx.fillStyle = "#9ca3af";
+          ctx.fillStyle = color;
           ctx.fillRect(
             bx * cellSize + 1,
             displayY * cellSize + 1,
             cellSize - 2,
             cellSize - 2,
+          );
+          ctx.fillStyle = "rgba(255,255,255,0.18)";
+          ctx.fillRect(
+            bx * cellSize + 1,
+            displayY * cellSize + 1,
+            cellSize - 2,
+            3,
           );
         }
       }

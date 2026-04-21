@@ -32,6 +32,9 @@ export interface GameState {
   lastClearWasTetris: boolean;
   lockCount: number;
   lastClearLines: number;
+  linesThisLevel: number;
+  levelUpCount: number;
+  levelTransitionPending: boolean;
 }
 
 export const BOARD_WIDTH = 10;

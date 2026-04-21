@@ -139,6 +139,14 @@ export class AudioEngine {
     });
   }
 
+  playLevelUp() {
+    if (!this.ctx || !this.sfxGain) return;
+    const now = this.ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+      this.playTone(f, 0.16, "square", 0.22, this.sfxGain!, now + i * 0.08);
+    });
+  }
+
   playGameOver() {
     if (!this.ctx || !this.sfxGain) return;
     const now = this.ctx.currentTime;

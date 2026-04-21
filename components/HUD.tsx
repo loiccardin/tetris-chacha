@@ -1,6 +1,7 @@
 "use client";
 
 import type { GameState } from "@/lib/tetris/types";
+import { linesGoalFor } from "@/lib/tetris/game";
 import PiecePreview from "./PiecePreview";
 
 interface Props {
@@ -13,13 +14,15 @@ export default function HUD({ state, compact = false }: Props) {
   const seconds = Math.floor(state.durationMs / 1000);
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");
+  const goal = linesGoalFor(state.level);
+  const linesLabel = `${state.linesThisLevel}/${goal}`;
 
   if (compact) {
     return (
       <div className="flex flex-col gap-2">
         <div className="grid grid-cols-4 gap-1 text-center">
           <MiniStat label="Score" value={state.score.toLocaleString()} />
-          <MiniStat label="Lines" value={state.lines.toString()} />
+          <MiniStat label="Lines" value={linesLabel} />
           <MiniStat label="Lvl" value={state.level.toString()} />
           <MiniStat label="Time" value={`${mm}:${ss}`} />
         </div>
@@ -46,7 +49,7 @@ export default function HUD({ state, compact = false }: Props) {
   return (
     <aside className="flex flex-col gap-3 min-w-[140px]">
       <Stat label="Score" value={state.score.toLocaleString()} />
-      <Stat label="Lines" value={state.lines.toString()} />
+      <Stat label="Lines" value={linesLabel} />
       <Stat label="Level" value={state.level.toString()} />
       <Stat label="Time" value={`${mm}:${ss}`} />
 

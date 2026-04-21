@@ -5,7 +5,9 @@ import {
   createInitialState,
   hardDrop,
   hold as doHold,
+  linesGoalFor,
   move,
+  resumeAfterLevelTransition,
   rotatePiece,
   softDrop,
   tick,
@@ -32,13 +34,17 @@ export default function TetrisGame() {
 
   const lockCountRef = useRef(0);
   const gameOverHandledRef = useRef(false);
+  const levelUpCountRef = useRef(0);
+  const [levelBanner, setLevelBanner] = useState<number | null>(null);
 
   const restart = useCallback(() => {
     stateRef.current = createInitialState();
     lockCountRef.current = 0;
+    levelUpCountRef.current = 0;
     gameOverHandledRef.current = false;
     setGameOverFillRow(null);
     setShowModal(false);
+    setLevelBanner(null);
     rerender();
   }, [rerender]);
 
@@ -70,6 +76,18 @@ export default function TetrisGame() {
         else a.playLock();
       }
 
+      // detect level up
+      if (s.levelUpCount !== levelUpCountRef.current) {
+        levelUpCountRef.current = s.levelUpCount;
+        getAudio().playLevelUp();
+        setLevelBanner(s.level);
+        setTimeout(() => {
+          resumeAfterLevelTransition(stateRef.current);
+          setLevelBanner(null);
+          rerender();
+        }, 1800);
+      }
+
       rerender();
       raf = requestAnimationFrame(loop);
     };
@@ -85,18 +103,19 @@ export default function TetrisGame() {
     const a = getAudio();
     a.stopMusic();
     a.playGameOver();
-    // Fill from bottom to top
+    // Fill from bottom (display row 19) up to the top (display row 0), then show modal.
     let row = BOARD_HEIGHT - 1;
     setGameOverFillRow(row);
     const interval = setInterval(() => {
       row -= 1;
-      if (row < BUFFER - 1) {
+      if (row < BUFFER) {
         clearInterval(interval);
-        setShowModal(true);
+        setGameOverFillRow(BUFFER);
+        setTimeout(() => setShowModal(true), 400);
         return;
       }
       setGameOverFillRow(row);
-    }, 40);
+    }, 35);
     return () => clearInterval(interval);
   }, [version]);
 
@@ -353,6 +372,22 @@ export default function TetrisGame() {
       <div className="text-[11px] text-neutral-500 text-center leading-relaxed mt-4 hidden md:block">
         Clavier : ← → ↓ · Espace = hard drop · Z/X = rotations · Shift = hold · P = pause
       </div>
+
+      {levelBanner !== null && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-40 pointer-events-none">
+          <div className="text-center">
+            <div className="text-cyan-400 text-sm uppercase tracking-[0.3em] mb-2">
+              Niveau terminé
+            </div>
+            <div className="text-white text-5xl sm:text-7xl font-bold mb-2">
+              LEVEL {levelBanner}
+            </div>
+            <div className="text-neutral-300 text-sm">
+              Objectif : {linesGoalFor(levelBanner)} lignes
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <GameOverModal
