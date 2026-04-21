@@ -1,5 +1,5 @@
 import Link from "next/link";
-import TetrisGame from "@/components/TetrisGame";
+import GameShell from "@/components/GameShell";
 
 export default function Home() {
   return (
@@ -17,7 +17,7 @@ export default function Home() {
         </Link>
       </header>
 
-      <TetrisGame />
+      <GameShell />
     </main>
   );
 }

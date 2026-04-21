@@ -18,3 +18,19 @@ model Score {
 
   @@index([score(sort: Desc)])
 }
+
+model Profile {
+  name           String   @id @db.VarChar(20)
+  level          Int      @default(1)
+  maxLevel       Int      @default(1)
+  linesThisLevel Int      @default(0)
+  totalLines     Int      @default(0)
+  totalGames     Int      @default(0)
+  bestScore      Int      @default(0)
+  lastScore      Int      @default(0)
+  createdAt      DateTime @default(now())
+  lastPlayedAt   DateTime @default(now())
+
+  @@index([bestScore(sort: Desc)])
+  @@index([lastPlayedAt(sort: Desc)])
+}

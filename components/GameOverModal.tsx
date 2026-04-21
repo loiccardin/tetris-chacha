@@ -7,6 +7,7 @@ interface Props {
   lines: number;
   level: number;
   durationSec: number;
+  defaultPseudo?: string;
   onSubmit: (pseudo: string) => Promise<void>;
   onRestart: () => void;
 }
@@ -16,10 +17,11 @@ export default function GameOverModal({
   lines,
   level,
   durationSec,
+  defaultPseudo = "",
   onSubmit,
   onRestart,
 }: Props) {
-  const [pseudo, setPseudo] = useState("");
+  const [pseudo, setPseudo] = useState(defaultPseudo);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);

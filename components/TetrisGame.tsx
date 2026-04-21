@@ -14,39 +14,133 @@ import {
   togglePause,
 } from "@/lib/tetris/game";
 import type { GameState } from "@/lib/tetris/types";
-import { BOARD_HEIGHT, BOARD_WIDTH, BUFFER } from "@/lib/tetris/types";
+import { BOARD_HEIGHT, BUFFER } from "@/lib/tetris/types";
 import { getAudio } from "@/lib/audio";
 import TetrisCanvas from "./TetrisCanvas";
 import HUD from "./HUD";
 import { HoldButton, TapButton } from "./Controls";
 import GameOverModal from "./GameOverModal";
+import type { Profile } from "./ProfilePicker";
 
-export default function TetrisGame() {
-  const stateRef = useRef<GameState>(createInitialState());
+interface Props {
+  profile: Profile;
+  onChangeProfile: () => void;
+}
+
+export default function TetrisGame({ profile, onChangeProfile }: Props) {
+  const stateRef = useRef<GameState>(
+    createInitialState(undefined, Date.now(), {
+      startLevel: profile.level,
+      startLinesThisLevel: profile.linesThisLevel,
+    }),
+  );
   const [version, setVersion] = useState(0);
   const [audioReady, setAudioReady] = useState(false);
   const [muted, setMuted] = useState(false);
   const [musicOn, setMusicOn] = useState(true);
   const [gameOverFillRow, setGameOverFillRow] = useState<number | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [levelBanner, setLevelBanner] = useState<number | null>(null);
+  const [bestScore, setBestScore] = useState(profile.bestScore);
 
   const rerender = useCallback(() => setVersion((c) => c + 1), []);
 
   const lockCountRef = useRef(0);
   const gameOverHandledRef = useRef(false);
   const levelUpCountRef = useRef(0);
-  const [levelBanner, setLevelBanner] = useState<number | null>(null);
+  const lastSavedRef = useRef<{ level: number; lines: number; score: number }>({
+    level: profile.level,
+    lines: profile.linesThisLevel,
+    score: 0,
+  });
+  const pendingAddLinesRef = useRef(0);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Save progression to server (throttled)
+  const saveProgress = useCallback(
+    async (payload: {
+      level?: number;
+      linesThisLevel?: number;
+      addLines?: number;
+      lastScore?: number;
+      bestScore?: number;
+      finishedGame?: boolean;
+    }) => {
+      try {
+        await fetch(`/api/profiles/${encodeURIComponent(profile.name)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        // offline is OK — retry on next event
+      }
+    },
+    [profile.name],
+  );
+
+  const scheduleSave = useCallback(() => {
+    if (saveTimerRef.current) return;
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      const s = stateRef.current;
+      const addLines = pendingAddLinesRef.current;
+      pendingAddLinesRef.current = 0;
+      const payload: Record<string, unknown> = {
+        level: s.level,
+        linesThisLevel: s.linesThisLevel,
+        lastScore: s.score,
+      };
+      if (addLines > 0) payload.addLines = addLines;
+      if (s.score > bestScore) {
+        payload.bestScore = s.score;
+        setBestScore(s.score);
+      }
+      saveProgress(payload);
+      lastSavedRef.current = {
+        level: s.level,
+        lines: s.linesThisLevel,
+        score: s.score,
+      };
+    }, 3000);
+  }, [bestScore, saveProgress]);
 
   const restart = useCallback(() => {
-    stateRef.current = createInitialState();
+    stateRef.current = createInitialState(undefined, Date.now(), {
+      startLevel: profile.level,
+      startLinesThisLevel: profile.linesThisLevel,
+    });
     lockCountRef.current = 0;
     levelUpCountRef.current = 0;
     gameOverHandledRef.current = false;
     setGameOverFillRow(null);
     setShowModal(false);
     setLevelBanner(null);
+    if (musicOn) getAudio().startMusic();
     rerender();
-  }, [rerender]);
+  }, [profile, musicOn, rerender]);
+
+  // When profile changes (prop), re-init state
+  useEffect(() => {
+    stateRef.current = createInitialState(undefined, Date.now(), {
+      startLevel: profile.level,
+      startLinesThisLevel: profile.linesThisLevel,
+    });
+    lockCountRef.current = 0;
+    levelUpCountRef.current = 0;
+    gameOverHandledRef.current = false;
+    setGameOverFillRow(null);
+    setShowModal(false);
+    setLevelBanner(null);
+    setBestScore(profile.bestScore);
+    lastSavedRef.current = {
+      level: profile.level,
+      lines: profile.linesThisLevel,
+      score: 0,
+    };
+    pendingAddLinesRef.current = 0;
+    rerender();
+  }, [profile, rerender]);
 
   const kickAudio = useCallback(() => {
     const a = getAudio();
@@ -68,19 +162,27 @@ export default function TetrisGame() {
       const s = stateRef.current;
       if (!s.isGameOver) tick(s, delta);
 
-      // detect lock & clear events
       if (s.lockCount !== lockCountRef.current) {
         lockCountRef.current = s.lockCount;
         const a = getAudio();
-        if (s.lastClearLines > 0) a.playClear(s.lastClearLines);
-        else a.playLock();
+        if (s.lastClearLines > 0) {
+          a.playClear(s.lastClearLines);
+          pendingAddLinesRef.current += s.lastClearLines;
+          scheduleSave();
+        } else {
+          a.playLock();
+        }
       }
 
-      // detect level up
       if (s.levelUpCount !== levelUpCountRef.current) {
         levelUpCountRef.current = s.levelUpCount;
         getAudio().playLevelUp();
         setLevelBanner(s.level);
+        saveProgress({
+          level: s.level,
+          linesThisLevel: 0,
+          lastScore: s.score,
+        });
         setTimeout(() => {
           resumeAfterLevelTransition(stateRef.current);
           setLevelBanner(null);
@@ -93,9 +195,9 @@ export default function TetrisGame() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [rerender]);
+  }, [rerender, saveProgress, scheduleSave]);
 
-  // Game over → fill animation → modal
+  // Game over
   useEffect(() => {
     const s = stateRef.current;
     if (!s.isGameOver || gameOverHandledRef.current) return;
@@ -103,7 +205,23 @@ export default function TetrisGame() {
     const a = getAudio();
     a.stopMusic();
     a.playGameOver();
-    // Fill from bottom (display row 19) up to the top (display row 0), then show modal.
+
+    // Save final state — keep level & linesThisLevel so they resume here.
+    const addLines = pendingAddLinesRef.current;
+    pendingAddLinesRef.current = 0;
+    const finalPayload: Record<string, unknown> = {
+      level: s.level,
+      linesThisLevel: s.linesThisLevel,
+      lastScore: s.score,
+      finishedGame: true,
+    };
+    if (addLines > 0) finalPayload.addLines = addLines;
+    if (s.score > bestScore) {
+      finalPayload.bestScore = s.score;
+      setBestScore(s.score);
+    }
+    saveProgress(finalPayload);
+
     let row = BOARD_HEIGHT - 1;
     setGameOverFillRow(row);
     const interval = setInterval(() => {
@@ -117,7 +235,7 @@ export default function TetrisGame() {
       setGameOverFillRow(row);
     }, 35);
     return () => clearInterval(interval);
-  }, [version]);
+  }, [version, bestScore, saveProgress]);
 
   // Keyboard
   useEffect(() => {
@@ -209,25 +327,29 @@ export default function TetrisGame() {
     };
   }, [rerender, kickAudio]);
 
-  const submitScore = useCallback(async (pseudo: string) => {
-    const s = stateRef.current;
-    const payload = {
-      pseudo,
-      score: s.score,
-      lines: s.lines,
-      level: s.level,
-      duration: Math.floor(s.durationMs / 1000),
-    };
-    const res = await fetch("/api/scores", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error ?? `HTTP ${res.status}`);
-    }
-  }, []);
+  // Submit score to leaderboard (auto-fills with profile name)
+  const submitScore = useCallback(
+    async (pseudo: string) => {
+      const s = stateRef.current;
+      const payload = {
+        pseudo,
+        score: s.score,
+        lines: s.lines,
+        level: s.level,
+        duration: Math.floor(s.durationMs / 1000),
+      };
+      const res = await fetch("/api/scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+    },
+    [],
+  );
 
   const s = stateRef.current;
 
@@ -272,8 +394,23 @@ export default function TetrisGame() {
 
   return (
     <div className="w-full flex flex-col items-center">
+      {/* Profile banner */}
+      <div className="w-full max-w-5xl flex items-center justify-between mb-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-neutral-500">Joueur :</span>
+          <span className="font-bold text-cyan-400">{profile.name}</span>
+          <span className="text-neutral-500">· record {bestScore.toLocaleString()}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onChangeProfile}
+          className="text-xs bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded px-3 py-1.5 hover:bg-neutral-800"
+        >
+          Changer de joueur
+        </button>
+      </div>
+
       <div className="flex flex-row items-start justify-center gap-2 sm:gap-4 w-full">
-        {/* LEFT PAD — main gauche */}
         <div className="flex flex-col gap-2 shrink-0 justify-center self-center">
           <HoldButton
             onHold={withAudio(() => doMove(-1))}
@@ -305,14 +442,12 @@ export default function TetrisGame() {
           </TapButton>
         </div>
 
-        {/* CENTER */}
         <TetrisCanvas
           state={s}
           version={version}
           gameOverFillRow={gameOverFillRow}
         />
 
-        {/* RIGHT PAD — main droite */}
         <div className="flex flex-col gap-2 shrink-0 justify-center self-center">
           <TapButton
             onTap={withAudio(doRotate)}
@@ -348,7 +483,6 @@ export default function TetrisGame() {
           </button>
         </div>
 
-        {/* HUD — visible on md+ to the far right */}
         <div className="hidden md:flex flex-col shrink-0">
           <HUD state={s} version={version} />
           <button
@@ -364,7 +498,6 @@ export default function TetrisGame() {
         </div>
       </div>
 
-      {/* Compact HUD under the board on small screens */}
       <div className="md:hidden mt-3 w-full max-w-xs">
         <HUD state={s} version={version} compact />
       </div>
@@ -395,6 +528,7 @@ export default function TetrisGame() {
           lines={s.lines}
           level={s.level}
           durationSec={Math.floor(s.durationMs / 1000)}
+          defaultPseudo={profile.name}
           onSubmit={submitScore}
           onRestart={restart}
         />

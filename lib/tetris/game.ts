@@ -52,9 +52,15 @@ export function msPerCell(level: number): number {
   return (framesPerCell(level) / 60) * 1000;
 }
 
+export interface StartOptions {
+  startLevel?: number;
+  startLinesThisLevel?: number;
+}
+
 export function createInitialState(
   seedRand?: () => number,
   now: number = Date.now(),
+  opts: StartOptions = {},
 ): GameState {
   const bag = new BagRandomizer(seedRand);
   const firstKind = bag.next();
@@ -73,7 +79,7 @@ export function createInitialState(
     canHold: true,
     score: 0,
     lines: 0,
-    level: 1,
+    level: Math.max(1, opts.startLevel ?? 1),
     dropCounter: 0,
     lockTimer: 0,
     isGameOver: false,
@@ -84,7 +90,7 @@ export function createInitialState(
     lastClearWasTetris: false,
     lockCount: 0,
     lastClearLines: 0,
-    linesThisLevel: 0,
+    linesThisLevel: Math.max(0, opts.startLinesThisLevel ?? 0),
     levelUpCount: 0,
     levelTransitionPending: false,
     _bag: bag,
