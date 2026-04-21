@@ -113,7 +113,7 @@ export default function ProfilePicker({ onPicked, open, onClose, canClose }: Pro
             </div>
             <ul className="flex flex-col gap-2">
               {profiles.map((p) => {
-                const goal = 10 + 5 * (p.level - 1);
+                const goal = 5 * p.level;
                 return (
                   <li key={p.name} className="flex items-center gap-2">
                     <button

@@ -8,7 +8,7 @@ import {
 } from "./board";
 
 export function linesGoalFor(level: number): number {
-  return 10 + 5 * (level - 1);
+  return 5 * Math.max(1, level);
 }
 import { BagRandomizer } from "./rng";
 import { rotate } from "./srs";
