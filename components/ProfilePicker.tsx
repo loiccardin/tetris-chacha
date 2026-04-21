@@ -84,69 +84,79 @@ export default function ProfilePicker({ onPicked, open, onClose, canClose }: Pro
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Qui joue ?</h2>
+    <div className="fixed inset-0 bg-[color:var(--color-bg)] z-50 overflow-y-auto">
+      <div className="min-h-full flex flex-col px-4 py-6 sm:px-8 sm:py-10 max-w-6xl mx-auto w-full">
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <div>
+            <div className="text-xs sm:text-sm uppercase tracking-[0.3em] text-cyan-400 mb-1">
+              Tetris Chacha
+            </div>
+            <h2 className="text-3xl sm:text-5xl font-bold">Qui joue ?</h2>
+          </div>
           {canClose && (
             <button
               type="button"
               onClick={onClose}
-              className="text-neutral-400 hover:text-white"
+              className="text-neutral-400 hover:text-white text-2xl w-12 h-12 flex items-center justify-center"
+              aria-label="Fermer"
             >
               ✕
             </button>
           )}
         </div>
 
-        {loading && <div className="text-sm text-neutral-400 mb-3">Chargement…</div>}
+        {loading && (
+          <div className="text-sm text-neutral-400 mb-3">Chargement…</div>
+        )}
         {error && (
-          <div className="bg-red-900/30 border border-red-800 rounded p-2 text-sm mb-3">
+          <div className="bg-red-900/30 border border-red-800 rounded p-3 text-sm mb-4">
             {error}
           </div>
         )}
 
         {profiles && profiles.length > 0 && (
-          <div className="mb-4">
-            <div className="text-xs uppercase text-neutral-500 mb-2">
+          <div className="mb-8">
+            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-3">
               Profils existants
             </div>
-            <ul className="flex flex-col gap-2">
+            <ul className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {profiles.map((p) => {
                 const goal = 5 * p.level;
                 return (
-                  <li key={p.name} className="flex items-center gap-2">
+                  <li key={p.name} className="relative group">
                     <button
                       type="button"
                       onClick={() => onPicked(p)}
-                      className="flex-1 text-left bg-black/30 hover:bg-black/50 border border-[color:var(--color-border)] rounded px-3 py-3"
+                      className="w-full h-full text-left bg-[color:var(--color-panel)] hover:bg-neutral-800 border border-[color:var(--color-border)] hover:border-cyan-600 rounded-xl px-4 py-4 transition"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="font-semibold text-lg">{p.name}</div>
-                        <div className="text-cyan-400 font-mono text-sm">
-                          Niveau {p.level}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="font-bold text-xl sm:text-2xl truncate">
+                          {p.name}
+                        </div>
+                        <div className="text-cyan-400 font-mono text-sm shrink-0 ml-2">
+                          Niv. {p.level}
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-[11px] text-neutral-400">
+                      <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
-                          <div className="uppercase text-neutral-500">
+                          <div className="text-[10px] uppercase text-neutral-500">
                             Progression
                           </div>
-                          <div className="font-mono">
-                            {p.linesThisLevel}/{goal} lignes
+                          <div className="font-mono text-sm">
+                            {p.linesThisLevel}/{goal}
                           </div>
                         </div>
                         <div>
-                          <div className="uppercase text-neutral-500">
-                            Level max
+                          <div className="text-[10px] uppercase text-neutral-500">
+                            Max
                           </div>
-                          <div className="font-mono">{p.maxLevel}</div>
+                          <div className="font-mono text-sm">{p.maxLevel}</div>
                         </div>
                         <div>
-                          <div className="uppercase text-neutral-500">
+                          <div className="text-[10px] uppercase text-neutral-500">
                             Record
                           </div>
-                          <div className="font-mono text-yellow-300">
+                          <div className="font-mono text-sm text-yellow-300 truncate">
                             {p.bestScore.toLocaleString()}
                           </div>
                         </div>
@@ -155,7 +165,7 @@ export default function ProfilePicker({ onPicked, open, onClose, canClose }: Pro
                     <button
                       type="button"
                       onClick={() => handleDelete(p.name)}
-                      className="text-neutral-500 hover:text-red-400 text-sm px-2"
+                      className="absolute top-2 right-2 text-neutral-600 hover:text-red-400 text-base w-8 h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
                       aria-label={`Supprimer ${p.name}`}
                     >
                       🗑
@@ -167,28 +177,36 @@ export default function ProfilePicker({ onPicked, open, onClose, canClose }: Pro
           </div>
         )}
 
-        <form onSubmit={handleCreate} className="flex flex-col gap-2">
-          <div className="text-xs uppercase text-neutral-500">
+        <form
+          onSubmit={handleCreate}
+          className="bg-[color:var(--color-panel)] border border-[color:var(--color-border)] rounded-xl p-4 sm:p-6"
+        >
+          <div className="text-xs uppercase tracking-wider text-neutral-500 mb-3">
             Nouveau joueur
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-3">
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Prénom (3–20 caractères)"
               maxLength={20}
-              className="flex-1 bg-black/40 border border-[color:var(--color-border)] rounded px-3 py-2 font-mono focus:outline-none focus:border-cyan-500"
+              className="flex-1 bg-black/40 border border-[color:var(--color-border)] rounded-lg px-4 py-3 text-lg font-mono focus:outline-none focus:border-cyan-500"
               autoComplete="off"
             />
             <button
               type="submit"
               disabled={!validName || loading}
-              className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed rounded px-4 py-2 font-semibold transition"
+              className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-6 py-3 text-lg font-semibold transition"
             >
               Créer
             </button>
           </div>
         </form>
+
+        <div className="mt-auto pt-6 text-center text-xs text-neutral-600">
+          Les profils sont enregistrés sur le serveur — tu les retrouves sur
+          n'importe quel appareil.
+        </div>
       </div>
     </div>
   );
